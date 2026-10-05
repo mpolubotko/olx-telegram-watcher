@@ -85,7 +85,7 @@ def get_city(offer: dict) -> str:
     return (loc.get("city") or {}).get("name", "") or ""
 
 
-def send_telegram(token: str, chat_id: str, offer: dict) -> None:
+def send_telegram(token: str, chat_id: str, offer: dict) -> bool:
     title = html.escape(offer.get("title", "Без назви"))
     price = html.escape(get_price(offer))
     city = html.escape(get_city(offer))
@@ -108,6 +108,8 @@ def send_telegram(token: str, chat_id: str, offer: dict) -> None:
     )
     if resp.status_code != 200:
         print(f"  !! Telegram error {resp.status_code}: {resp.text[:200]}")
+        return False
+    return True
 
 
 def load_seen() -> list[int]:
@@ -161,13 +163,15 @@ def main() -> None:
     new_offers.sort(key=lambda o: o.get("created_time", ""))
 
     print(f"Found {len(new_offers)} new offer(s).")
+    sent_any = False
     for o in new_offers:
         print(f"  -> {o['id']} {o.get('title','')[:50]}")
-        send_telegram(token, chat_id, o)
+        if send_telegram(token, chat_id, o):
+            seen.append(o["id"])  # only mark seen if delivery succeeded (auto-retry otherwise)
+            sent_any = True
         time.sleep(1)  # stay under Telegram rate limits
-        seen.append(o["id"])
 
-    if new_offers:
+    if sent_any:
         save_seen(seen)
 
 
